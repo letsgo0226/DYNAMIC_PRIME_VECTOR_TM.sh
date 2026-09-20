@@ -1,0 +1,50 @@
+name: DYNAMIC_PRIME_VECTOR_TM
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches: [main, master]
+    paths:
+      - "DYNAMIC_PRIME_VECTOR_TM.sh"
+      - "DYNAMIC_PRIME_VECTOR_TM.md"
+      - ".github/workflows/dynamic-prime-vector-tm.yml"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [dynamic_prime_vector_tm]
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify dynamic prime-vector TM certificate
+        run: |
+          set -euo pipefail
+          BYTES=$(wc -c < DYNAMIC_PRIME_VECTOR_TM.sh | tr -d ' ')
+          echo "bytes=$BYTES"
+          test "$BYTES" -lt 2048
+          rm -f state.json HALT
+          MAX_TICKS=5 HZ=100 bash DYNAMIC_PRIME_VECTOR_TM.sh | tee ticks.jsonl
+          python3 - <<'PY'
+          import json
+          o=json.load(open("state.json"))
+          h=o.get("hologram") or {}
+          assert o.get("model")=="DYNAMIC_PRIME_VECTOR_TM"
+          assert o.get("t")==5
+          assert o.get("n")>=1 and o.get("p")>=2
+          assert h.get("sha") is False
+          assert h.get("reconstruct") is True
+          print("PASS", "t=", o["t"], "n=", o["n"], "p=", o["p"])
+          PY
+          cp state.json cert.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-prime-vector-tm-certificate
+          path: |
+            cert.json
+            ticks.jsonl
